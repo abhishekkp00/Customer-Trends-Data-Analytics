@@ -1,6 +1,6 @@
 # Customer Intelligence | Shopping Behavior & Business Insights
 
-An end-to-end customer analytics project: a Python cleaning pipeline, a **Neon PostgreSQL** database, SQL business analysis, and an interactive **Streamlit + Plotly** dashboard that turns 3,900 customer shopping records into business insights a non-technical stakeholder can act on.
+A customer analytics project: a Python cleaning notebook, a **Neon PostgreSQL** database, SQL business queries, and an interactive **Streamlit + Plotly** dashboard over 3,900 customer shopping records.
 
 ## Business problem
 
@@ -15,7 +15,7 @@ A retailer wants to know **who its customers are, what they buy, how they pay, a
 
 | Item | Detail |
 |---|---|
-| Source file | `customer_shopping_behavior.csv` (3,900 records, 18 raw columns) |
+| Source file | `data_source/customer_shopping_behavior.csv` (3,900 records, 18 raw columns) |
 | Database table | `customer` in Neon PostgreSQL |
 | Key fields | customer_id, age, gender, item_purchased, category, purchase_amount (USD), location, season, review_rating, subscription_status, shipping_type, discount_applied, previous_purchases, payment_method, frequency_of_purchases |
 | Derived fields | `age_group`, `purchase_frequency_days` |
@@ -30,7 +30,7 @@ A retailer wants to know **who its customers are, what they buy, how they pay, a
 
 ## Data cleaning and feature engineering
 
-Done once in `Customer_Shopping_Behavior_Analysis.ipynb` (the dashboard does **not** repeat it):
+Done once in `notebooks/Customer_Shopping_Behavior_Analysis.ipynb` (the dashboard does **not** repeat it):
 
 1. Load the CSV and profile it (`info`, `describe`, null counts).
 2. Fill 37 missing `Review Rating` values with the **median rating of the product category**.
@@ -51,31 +51,42 @@ flowchart LR
     E --> F[Business Insights]
 ```
 
-- **Neon PostgreSQL is the single source of truth.** The dashboard never reads the CSV.
+- **Neon PostgreSQL is the single source of truth.** The dashboard never reads the CSV; the CSV is only the input of the cleaning notebook.
 - **Read-only access:** the dashboard only runs `SELECT`s, and every session is opened with `default_transaction_read_only=on`, so the server itself rejects writes.
 - Credentials come from `DATABASE_URL` (`.env`, via `python-dotenv`); they are never hardcoded, logged or shown in the UI.
 - Data is loaded once, cached (`st.cache_data`, 1 hour) and filtered in-memory with pandas, so filter changes are instant. A **Refresh data from database** button clears the cache.
 
+Data flow: `database` (engine, SELECTs) -> `analytics.data_loader` (validate, add segment) -> cached in `app.py` -> sidebar filters -> `dashboard/*` tabs, which call `analytics.metrics` / `analytics.insights` for numbers and `components.charts` for figures.
+
 ### Project structure
 
 ```text
-app.py                      Streamlit entry point (layout + sections)
-config/settings.py          Titles, expected schema, segmentation rules, filter list
-database/connection.py      Read-only SQLAlchemy engine, safe error messages
-analytics/data_loader.py    Schema + data-quality validation, loading
-analytics/metrics.py        KPI and aggregation functions (pure, tested)
-analytics/insights.py       Dynamic insight generation (nothing hardcoded)
-components/filters.py       Sidebar filters + reset
-components/kpi_cards.py     KPI cards and number formatting
-components/charts.py        Plotly figure builders
-tests/test_analytics.py     Unit tests (pytest)
-Customer_Shopping_Behavior_Analysis.ipynb   Cleaning + upload to Neon
-customer_behavior_sql_queries.sql           10 SQL business questions
+app.py                        Entry point: page setup, cached data loading, filters, tabs
+dashboard/                    One module per tab (render functions) + styles
+  styles.py                   CSS, hero banner, "key finding" box
+  overview.py  demographics.py  products.py  subscriptions.py
+  discounts.py purchasing.py    insights.py  data_quality.py
+analytics/                    No Streamlit/Plotly/database code
+  data_loader.py              Validation, data-quality report, customer segment
+  metrics.py                  KPIs and aggregations
+  insights.py                 Dynamic business insights
+components/                   Reusable UI pieces
+  charts.py                   Plotly figure builders
+  filters.py                  Sidebar filters and filtering logic
+  kpi_cards.py                KPI cards and number formatting
+database/
+  connection.py               Read-only engine, safe error messages
+  queries.py                  The only SQL the app runs (SELECTs)
+config/settings.py            Expected schema, segment rule, filters, thresholds
+tests/                        pytest: analytics, database, dashboard
+sql/customer_behavior_sql_queries.sql         10 SQL business questions
+notebooks/Customer_Shopping_Behavior_Analysis.ipynb   Cleaning + upload to Neon
+data_source/customer_shopping_behavior.csv    Raw data (notebook input only)
 ```
 
 ## SQL analysis
 
-`customer_behavior_sql_queries.sql` answers 10 business questions directly in PostgreSQL: revenue by gender, high-spending discount users, top-rated products, shipping comparison, subscriber value, discount-heavy products, customer segmentation, top products per category (window functions), repeat buyers vs subscription, and revenue by age group. The dashboard's KPIs and group summaries can be reconciled against these queries.
+[`sql/customer_behavior_sql_queries.sql`](sql/customer_behavior_sql_queries.sql) answers 10 business questions directly in PostgreSQL: revenue by gender, high-spending discount users, top-rated products, shipping comparison, subscriber value, discount-heavy products, customer segmentation, top products per category (window functions), repeat buyers vs subscription, and revenue by age group. The dashboard's KPIs and group summaries can be reconciled against these queries.
 
 ## Interactive dashboard
 
@@ -94,7 +105,7 @@ Eight tabs, all driven by the sidebar filters:
 
 **Filters:** gender, age group, category, product, season, subscription, shipping, discount, payment method, purchase frequency and location (plus a reset button). Empty selections mean "all"; empty results show a clear message instead of errors.
 
-**Segmentation rules** (same as SQL Q7): *New* = 0-1 previous purchases, *Returning* = 2-10, *Loyal* = more than 10. "New" means a **short recorded history**, not necessarily a first-time buyer.
+**Segmentation rule** (defined once in `config/settings.py`, same thresholds in SQL Q7): *New* = 0-1 previous purchases, *Returning* = 2-10, *Loyal* = more than 10. "New" means a **short recorded history**, not necessarily a first-time buyer.
 
 **Analytical safeguards:** schema validation, duplicate/ID checks, safe division, group-level denominators for rates, minimum group sizes before ranking, and insights suppressed when data is insufficient.
 
@@ -114,13 +125,15 @@ cp .env.example .env                 # then edit .env and set DATABASE_URL
 streamlit run app.py
 ```
 
-Run the tests (no database needed):
+Run the tests (no database or network needed; they use synthetic data and in-memory SQLite):
 
 ```bash
 python -m pytest -q
 ```
 
 `.env` is git-ignored. Never commit real credentials.
+
+**Notebook:** open `notebooks/Customer_Shopping_Behavior_Analysis.ipynb` with Jupyter started in the `notebooks/` folder (paths to `../data_source/` and `../.env` are relative to it).
 
 **Troubleshooting:** if you see "Database host could not be resolved" although the URL is correct, your local DNS may not resolve Neon hostnames. Set `DB_RESOLVER_DNS=1.1.1.1` in `.env`; the app then looks the host up through that DNS server and still verifies TLS against the real hostname.
 
@@ -129,15 +142,3 @@ python -m pytest -q
 ## Screenshots
 
 > Add screenshots to a `docs/screenshots/` folder and link them here.
-
-| Overview | Products | Insights |
-|---|---|---|
-| `docs/screenshots/overview.png` | `docs/screenshots/products.png` | `docs/screenshots/insights.png` |
-
-## Why this complements the Power BI work
-
-The Power BI report is a polished, visual summary for presenting results. This dashboard adds what a BI canvas typically does not show in a portfolio: a **live, read-only connection to PostgreSQL**, **code-driven validation** of the data, **tested KPI logic**, **version-controlled and reproducible analytics**, and **insights generated from the current filters** with explicit caveats. Together they show both BI tooling and engineering-quality analytics.
-
-## Skills demonstrated
-
-Python, pandas, NumPy, SQL (aggregations, CTEs, window functions), PostgreSQL on Neon, SQLAlchemy, secure configuration with environment variables, data validation and quality checks, KPI design, Streamlit, Plotly, data storytelling, unit testing with pytest, and honest communication of data limitations.

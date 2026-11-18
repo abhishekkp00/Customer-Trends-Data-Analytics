@@ -31,10 +31,6 @@ CATEGORICAL_COLUMNS = [
 ]
 REQUIRED_COLUMNS = NUMERIC_COLUMNS + CATEGORICAL_COLUMNS
 
-# Columns that must never contain nulls (review_rating is allowed a few: the
-# cleaning step imputes them, but we do not rely on that).
-NON_NULL_COLUMNS = [c for c in REQUIRED_COLUMNS if c != "review_rating"]
-
 # Expected labels for binary / ordinal fields; anything else is flagged.
 EXPECTED_LABELS = {
     "gender": {"Male", "Female"},
@@ -45,15 +41,21 @@ EXPECTED_LABELS = {
 
 AGE_GROUP_ORDER = ["Young Adult", "Adult", "Middle-aged", "Senior"]
 
-# Customer segmentation. Mirrors Q7 in customer_behavior_sql_queries.sql.
-# NOTE: "New" means exactly one previous purchase, i.e. a customer with a
-# very short recorded history - not a first-time buyer. 0 is treated as New
-# as well so the segmentation is exhaustive if such rows ever appear.
+# Customer segmentation by the `previous_purchases` field. This is the single
+# definition used by the dashboard; Q7 in sql/customer_behavior_sql_queries.sql
+# uses the same thresholds.
+#   New:       previous_purchases <= NEW_MAX_PREVIOUS_PURCHASES
+#   Returning: up to RETURNING_MAX_PREVIOUS_PURCHASES
+#   Loyal:     more than RETURNING_MAX_PREVIOUS_PURCHASES
+# "New" means a very short recorded history, not necessarily a first-time
+# buyer. Zero is included in New so the segmentation covers every row.
+NEW_MAX_PREVIOUS_PURCHASES = 1
+RETURNING_MAX_PREVIOUS_PURCHASES = 10
 SEGMENT_ORDER = ["New", "Returning", "Loyal"]
 SEGMENT_RULES = {
-    "New": "0-1 previous purchases",
-    "Returning": "2-10 previous purchases",
-    "Loyal": "More than 10 previous purchases",
+    "New": f"0-{NEW_MAX_PREVIOUS_PURCHASES} previous purchases",
+    "Returning": f"{NEW_MAX_PREVIOUS_PURCHASES + 1}-{RETURNING_MAX_PREVIOUS_PURCHASES} previous purchases",
+    "Loyal": f"More than {RETURNING_MAX_PREVIOUS_PURCHASES} previous purchases",
 }
 
 # Frequency labels ordered from most to least frequent.
@@ -90,10 +92,7 @@ FILTER_SPECS = [
 # Colour palette (consistent across charts).
 PALETTE = {
     "primary": "#4F46E5",
-    "secondary": "#0EA5E9",
     "accent": "#F59E0B",
-    "positive": "#10B981",
-    "negative": "#EF4444",
     "muted": "#94A3B8",
 }
 CATEGORY_COLORS = [

@@ -46,10 +46,11 @@ LIMIT 5;
 
 --Q7. Segment customers into New, Returning, and Loyal based on their total 
 -- number of previous purchases, and show the count of each segment. 
+-- Rule (same as config/settings.py): New = 0-1, Returning = 2-10, Loyal = more than 10.
 with customer_type as (
 SELECT customer_id, previous_purchases,
 CASE 
-    WHEN previous_purchases = 1 THEN 'New'
+    WHEN previous_purchases <= 1 THEN 'New'
     WHEN previous_purchases BETWEEN 2 AND 10 THEN 'Returning'
     ELSE 'Loyal'
     END AS customer_segment

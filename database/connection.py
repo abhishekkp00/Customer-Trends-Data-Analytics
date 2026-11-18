@@ -10,7 +10,6 @@ Security notes
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 from dotenv import load_dotenv
 from sqlalchemy import Engine, create_engine, text
@@ -25,7 +24,8 @@ class DatabaseError(Exception):
 
 
 def get_database_url() -> str:
-    url: Optional[str] = os.getenv("DATABASE_URL")
+    """Read DATABASE_URL and pin the psycopg (v3) driver."""
+    url: str | None = os.getenv("DATABASE_URL")
     if not url or not url.strip():
         raise DatabaseError(
             "DATABASE_URL is not set. Copy `.env.example` to `.env` and add "
@@ -41,7 +41,7 @@ def get_database_url() -> str:
     return url
 
 
-def _resolve_hostaddr(url: str) -> Optional[str]:
+def _resolve_hostaddr(url: str) -> str | None:
     """If DB_RESOLVER_DNS is set (e.g. 1.1.1.1), resolve the DB host through
     that DNS server and return the IP for libpq's ``hostaddr``. The original
     hostname is still used for TLS/SNI, so certificate checks are unchanged.

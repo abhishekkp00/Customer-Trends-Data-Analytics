@@ -7,7 +7,7 @@ returns an Insight with ``supported=False`` and a clear message.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable
 
 import pandas as pd
 
@@ -22,14 +22,16 @@ NO_DATES = "The data has no transaction dates, so no time trends can be assessed
 
 @dataclass
 class Insight:
+    """One business finding. Unsupported insights only carry ``message``."""
+
     title: str
     supported: bool
-    finding: str = ""        # 1. What the data shows
-    metric: str = ""         # 2. Relevant metric and comparison
-    why_it_matters: str = "" # 3. Why a stakeholder should care
-    recommendation: str = "" # 4. Practical recommendation
-    caveat: str = ""         # 5. Limitation
-    message: str = ""        # shown when not supported
+    finding: str = ""
+    metric: str = ""
+    why_it_matters: str = ""
+    recommendation: str = ""
+    caveat: str = ""
+    message: str = ""
 
 
 def _unsupported(title: str, reason: str) -> Insight:
@@ -53,7 +55,6 @@ def _insufficient_msg(df: pd.DataFrame) -> str:
             f"{settings.MIN_RECORDS_FOR_INSIGHT} are needed to state a reliable finding.")
 
 
-# --------------------------------------------------------------------------- #
 def highest_spending_segment(df: pd.DataFrame) -> Insight:
     title = "Highest-spending customer segment"
     if _insufficient(df):
