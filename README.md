@@ -1,132 +1,143 @@
-# Customer Trends & Shopping Behavior Analysis
+# Customer Intelligence | Shopping Behavior & Business Insights
 
-An end-to-end data analytics project exploring customer shopping behavior using Python, Pandas, and PostgreSQL. The workflow cleans and enriches transaction-level customer data, loads it into a PostgreSQL database hosted on Neon, and uses SQL queries to answer business questions about revenue, discounts, subscriptions, products, shipping, and customer segments.
+An end-to-end customer analytics project: a Python cleaning pipeline, a **Neon PostgreSQL** database, SQL business analysis, and an interactive **Streamlit + Plotly** dashboard that turns 3,900 customer shopping records into business insights a non-technical stakeholder can act on.
 
-## Project Goals
+## Business problem
 
-- Understand purchasing patterns across customer demographics and product categories.
-- Compare revenue and purchase behavior across customer groups.
-- Examine discount usage, product ratings, shipping methods, and subscription status.
-- Segment customers using previous-purchase history.
-- Demonstrate a reproducible workflow spanning Python data preparation and SQL-based analysis.
+A retailer wants to know **who its customers are, what they buy, how they pay, and where discounts and subscriptions fit in**, so marketing, merchandising and logistics teams can prioritise effort. The dashboard answers questions such as:
 
-## Tech Stack
+- Which customer segments, age groups and locations contribute most purchase amount?
+- Which categories and products are most popular, best rated, or most discount-dependent?
+- Do subscribers spend differently from non-subscribers?
+- Which shipping and payment options do customers actually use?
 
-- **Python** — data preparation and transformation
-- **Pandas** — data loading, cleaning, exploration, and feature engineering
-- **PostgreSQL** — analytical queries and customer data storage
-- **Neon** — hosted PostgreSQL database
-- **SQLAlchemy** — database connection and data transfer
-- **psycopg** — PostgreSQL connectivity
-- **Jupyter Notebook** — exploratory analysis and workflow documentation
-- **SQL** — aggregations, conditional logic, CTEs, and window functions
+## Dataset and limitations
 
-## Dataset
+| Item | Detail |
+|---|---|
+| Source file | `customer_shopping_behavior.csv` (3,900 records, 18 raw columns) |
+| Database table | `customer` in Neon PostgreSQL |
+| Key fields | customer_id, age, gender, item_purchased, category, purchase_amount (USD), location, season, review_rating, subscription_status, shipping_type, discount_applied, previous_purchases, payment_method, frequency_of_purchases |
+| Derived fields | `age_group`, `purchase_frequency_days` |
 
-The project uses `customer_shopping_behavior.csv`, containing **3,900 customer shopping records** and fields such as:
+**Limitations (the dashboard respects all of these):**
 
-- Customer ID, age, and gender
-- Item purchased and product category
-- Purchase amount and location
-- Size, color, and season
-- Review rating
-- Subscription status
-- Shipping type
-- Discount applied and promo code used
-- Previous purchases
-- Payment method and purchase frequency
+- **No transaction date or timestamp** - there are no time trends, seasonality-over-time or period comparisons. `season` is a product attribute, not a purchase date.
+- `purchase_amount` is the recorded amount in USD; margins, costs and pre-discount prices are not available.
+- Rows are *records*; the dashboard checks customer-ID uniqueness and reports records and unique customers separately.
+- Findings are **observational associations**, not causal claims (e.g. discounts are not shown to *cause* higher spend).
+- `discount_applied` and `promo_code_used` were identical, so promo codes are not analysed separately.
 
-The dataset is suitable for descriptive analysis of the available records. It does not provide timestamps for a chronological time-series analysis, so the project focuses on shopping patterns and customer trends represented in the dataset rather than forecasting future demand.
+## Data cleaning and feature engineering
 
-## Workflow
+Done once in `Customer_Shopping_Behavior_Analysis.ipynb` (the dashboard does **not** repeat it):
 
-1. **Load and inspect the data** in Pandas; review data types, distributions, and missing values.
-2. **Prepare and enrich features**, including age-group labels and a mapped purchase-frequency interval in days.
-3. **Check redundant fields** by comparing discount and promo-code indicators; remove the duplicate promo-code field from the prepared dataframe when they match.
-4. **Connect to PostgreSQL** using SQLAlchemy and a Neon database connection string loaded from an environment variable.
-5. **Load the prepared dataframe** into a PostgreSQL table named `customer`.
-6. **Run SQL analysis** to calculate revenue, compare groups, rank products, and build customer segments.
+1. Load the CSV and profile it (`info`, `describe`, null counts).
+2. Fill 37 missing `Review Rating` values with the **median rating of the product category**.
+3. Standardise column names (lower-case, snake_case; `purchase_amount_(usd)` -> `purchase_amount`).
+4. `age_group`: age quartiles labelled Young Adult / Adult / Middle-aged / Senior (`pd.qcut`, so groups are similar in size by design).
+5. `purchase_frequency_days`: maps the frequency label (Weekly = 7, Fortnightly/Bi-Weekly = 14, Monthly = 30, Quarterly/Every 3 Months = 90, Annually = 365).
+6. Drop `promo_code_used` (identical to `discount_applied`).
+7. Write the cleaned table to Neon as `customer`.
 
-## Business Questions Answered with SQL
+## Architecture
 
-The SQL script (`customer_behavior_sql_queries.sql`) includes queries addressing:
+```mermaid
+flowchart LR
+    A[CSV] --> B[Python Data Cleaning]
+    B --> C[(Neon PostgreSQL)]
+    C --> D[SQL / Python Analytics]
+    D --> E[Streamlit + Plotly Dashboard]
+    E --> F[Business Insights]
+```
 
-1. Total revenue by gender.
-2. Customers who used a discount and spent at least the overall average purchase amount.
-3. Five products with the highest average review rating.
-4. Average purchase amount for Standard versus Express shipping.
-5. Customer counts, average spend, and total revenue for subscribers versus non-subscribers.
-6. Products with the highest percentage of purchases using discounts.
-7. New, returning, and loyal customer segments based on previous-purchase counts.
-8. Top three most-purchased products within each category using a CTE and window ranking.
-9. Subscription status among repeat buyers with more than five previous purchases.
-10. Revenue contribution by age group.
+- **Neon PostgreSQL is the single source of truth.** The dashboard never reads the CSV.
+- **Read-only access:** the dashboard only runs `SELECT`s, and every session is opened with `default_transaction_read_only=on`, so the server itself rejects writes.
+- Credentials come from `DATABASE_URL` (`.env`, via `python-dotenv`); they are never hardcoded, logged or shown in the UI.
+- Data is loaded once, cached (`st.cache_data`, 1 hour) and filtered in-memory with pandas, so filter changes are instant. A **Refresh data from database** button clears the cache.
 
-These queries demonstrate practical SQL skills, including `GROUP BY`, aggregate functions, subqueries, `CASE` expressions, CTEs, and window functions such as `ROW_NUMBER()`.
-
-## Repository Contents
+### Project structure
 
 ```text
-Customer-Trends-Data-Analytics/
-├── Customer_Shopping_Behavior_Analysis.ipynb
-├── customer_shopping_behavior.csv
-├── customer_behavior_sql_queries.sql
-├── .gitignore
-└── README.md
+app.py                      Streamlit entry point (layout + sections)
+config/settings.py          Titles, expected schema, segmentation rules, filter list
+database/connection.py      Read-only SQLAlchemy engine, safe error messages
+analytics/data_loader.py    Schema + data-quality validation, loading
+analytics/metrics.py        KPI and aggregation functions (pure, tested)
+analytics/insights.py       Dynamic insight generation (nothing hardcoded)
+components/filters.py       Sidebar filters + reset
+components/kpi_cards.py     KPI cards and number formatting
+components/charts.py        Plotly figure builders
+tests/test_analytics.py     Unit tests (pytest)
+Customer_Shopping_Behavior_Analysis.ipynb   Cleaning + upload to Neon
+customer_behavior_sql_queries.sql           10 SQL business questions
 ```
 
-## Run the Analysis
+## SQL analysis
 
-### 1. Clone the repository
+`customer_behavior_sql_queries.sql` answers 10 business questions directly in PostgreSQL: revenue by gender, high-spending discount users, top-rated products, shipping comparison, subscriber value, discount-heavy products, customer segmentation, top products per category (window functions), repeat buyers vs subscription, and revenue by age group. The dashboard's KPIs and group summaries can be reconciled against these queries.
+
+## Interactive dashboard
+
+Eight tabs, all driven by the sidebar filters:
+
+| Tab | What it answers |
+|---|---|
+| Executive Overview | 8 KPIs (total purchase amount, records, unique customers, average per record, age, rating, subscription rate, discount rate) with explanations and "All data" comparison |
+| Customer Demographics | Gender, age group, location distribution and spend |
+| Product & Category | Category contribution (treemap with drill-down), dynamic product ranking, popularity vs rating, rating distributions |
+| Subscription & Segments | Subscribers vs non-subscribers, previous-purchase segments, documented segmentation rules |
+| Discounts | Usage, spend comparison, discount dependence by category/product |
+| Shipping & Payment | Shipping and payment preferences, purchase frequency, payment x shipping heatmap |
+| Insights & Recommendations | Seven insights computed from the filtered data, each with finding, metric, why it matters, recommendation and caveat |
+| Data Quality | Row reconciliation with `COUNT(*)`, missing values, duplicates, unexpected labels |
+
+**Filters:** gender, age group, category, product, season, subscription, shipping, discount, payment method, purchase frequency and location (plus a reset button). Empty selections mean "all"; empty results show a clear message instead of errors.
+
+**Segmentation rules** (same as SQL Q7): *New* = 0-1 previous purchases, *Returning* = 2-10, *Loyal* = more than 10. "New" means a **short recorded history**, not necessarily a first-time buyer.
+
+**Analytical safeguards:** schema validation, duplicate/ID checks, safe division, group-level denominators for rates, minimum group sizes before ranking, and insights suppressed when data is insufficient.
+
+## Run locally
+
+Requires Python 3.10+ and a Neon database containing the `customer` table.
 
 ```bash
-git clone https://github.com/abhishekkp00/Customer-Trends-Data-Analytics.git
-cd Customer-Trends-Data-Analytics
+git clone <your-repo-url>
+cd Customer-Trend-Data-Analysis
+
+python3 -m venv .venv
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+cp .env.example .env                 # then edit .env and set DATABASE_URL
+streamlit run app.py
 ```
 
-### 2. Create a virtual environment and install dependencies
+Run the tests (no database needed):
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install pandas sqlalchemy "psycopg[binary]" python-dotenv jupyter
+python -m pytest -q
 ```
 
-### 3. Configure the database connection
+`.env` is git-ignored. Never commit real credentials.
 
-Create a local `.env` file in the project root:
+**Troubleshooting:** if you see "Database host could not be resolved" although the URL is correct, your local DNS may not resolve Neon hostnames. Set `DB_RESOLVER_DNS=1.1.1.1` in `.env`; the app then looks the host up through that DNS server and still verifies TLS against the real hostname.
 
-```env
-DATABASE_URL=your_neon_postgresql_connection_string
-```
+> **Warning:** the notebook's last cell uploads with `if_exists="replace"`, which *replaces* the `customer` table. Only run it deliberately; the dashboard itself never writes.
 
-Use your own Neon connection string and keep the `.env` file private. It is excluded from version control by `.gitignore`.
+## Screenshots
 
-### 4. Run the notebook
+> Add screenshots to a `docs/screenshots/` folder and link them here.
 
-```bash
-jupyter notebook Customer_Shopping_Behavior_Analysis.ipynb
-```
+| Overview | Products | Insights |
+|---|---|---|
+| `docs/screenshots/overview.png` | `docs/screenshots/products.png` | `docs/screenshots/insights.png` |
 
-Run the notebook cells in order. The database-loading portion connects to Neon and writes the prepared dataframe to the `customer` table. Review the database URL and target database before running cells that write data; the notebook uses `if_exists="replace"`, which replaces an existing table with the same name.
+## Why this complements the Power BI work
 
-### 5. Execute the SQL queries
+The Power BI report is a polished, visual summary for presenting results. This dashboard adds what a BI canvas typically does not show in a portfolio: a **live, read-only connection to PostgreSQL**, **code-driven validation** of the data, **tested KPI logic**, **version-controlled and reproducible analytics**, and **insights generated from the current filters** with explicit caveats. Together they show both BI tooling and engineering-quality analytics.
 
-Open `customer_behavior_sql_queries.sql` in a PostgreSQL client connected to the same database, then execute the queries against the `customer` table after the data has been loaded.
+## Skills demonstrated
 
-## Interview Discussion Points
-
-- **Data preparation:** handling missing values, normalizing column names, and creating derived features.
-- **Data modeling choices:** identifying redundant columns and defining clear customer-segmentation rules.
-- **SQL analysis:** comparing groups using aggregates, filtering with subqueries, and ranking products using window functions.
-- **Database integration:** connecting a Pandas workflow to a hosted PostgreSQL database with SQLAlchemy.
-- **Business interpretation:** translating query results into questions about customer engagement, discount dependence, product performance, and subscription behavior.
-- **Limitations:** the analysis is descriptive; differences between groups do not establish causation, and frequency labels are mapped to approximate day intervals for feature creation.
-
-## Scope and Limitations
-
-This repository documents an analytics workflow, not a production customer analytics platform. It does not currently implement predictive modeling, automated dashboards, production scheduling, or causal analysis. Any business recommendations should be based on the actual query results and considered alongside the dataset's limitations.
-
-## License
-
-No license is specified in this repository. Contact the repository owner before reusing the code or dataset beyond the permissions that otherwise apply.
+Python, pandas, NumPy, SQL (aggregations, CTEs, window functions), PostgreSQL on Neon, SQLAlchemy, secure configuration with environment variables, data validation and quality checks, KPI design, Streamlit, Plotly, data storytelling, unit testing with pytest, and honest communication of data limitations.
