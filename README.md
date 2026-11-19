@@ -19,7 +19,8 @@
 5. [Project Structure](#project-structure)
 6. [Tech Stack](#tech-stack)
 7. [Dashboard Screenshots](#dashboard-screenshots)
-8. [SQL Analysis](#sql-analysis)
+8. [Power BI Report](#power-bi-report)
+9. [SQL Analysis](#sql-analysis)
 9. [Key Insights](#key-insights)
 10. [Analytical Safeguards](#analytical-safeguards)
 11. [Run Locally](#run-locally)
@@ -216,6 +217,24 @@ Seven insights are computed from the active filter selection. Each card surfaces
 - **Caveat** — a methodological warning to prevent overconfidence
 
 Insights are **suppressed when data is insufficient** (< 30 records, or < 10 per group for ranking insights).
+
+---
+
+## Power BI Report
+
+The repository also includes a Power BI report for customer shopping behavior analysis. The report is organised as a single page and includes:
+
+- **KPI cards:** Number of Customers, Average Purchase Amount, and Average Review Rating.
+- **Subscription analysis:** donut chart showing the customer count by subscription status.
+- **Category analysis:** revenue and customer-count views grouped by product category.
+- **Age-group analysis:** purchase amount and customer-count views grouped by age group.
+- **Interactive slicers:** subscription status, gender, category, and shipping type.
+
+### Report layout preview
+
+![Power BI report layout preview](docs/screenshots/powerbi-layout.svg)
+
+> **Preview note:** The image above is a layout reconstruction based on the uploaded PBIX report metadata. The chart marks are illustrative placeholders, not exported Power BI values or a screenshot of the rendered report. Open the PBIX in Power BI Desktop to inspect the actual visuals and interact with the slicers.
 
 ---
 
