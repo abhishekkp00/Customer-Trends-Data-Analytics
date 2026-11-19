@@ -222,7 +222,7 @@ Insights are **suppressed when data is insufficient** (< 30 records, or < 10 per
 
 ## Power BI Report
 
-The repository also includes a Power BI report for customer shopping behavior analysis. The report is organised as a single page and includes:
+A companion Power BI report for customer shopping behavior analysis has been prepared. Its single-page layout includes:
 
 - **KPI cards:** Number of Customers, Average Purchase Amount, and Average Review Rating.
 - **Subscription analysis:** donut chart showing the customer count by subscription status.
@@ -234,7 +234,7 @@ The repository also includes a Power BI report for customer shopping behavior an
 
 ![Power BI report layout preview](docs/screenshots/powerbi-layout.svg)
 
-> **Preview note:** The image above is a layout reconstruction based on the uploaded PBIX report metadata. The chart marks are illustrative placeholders, not exported Power BI values or a screenshot of the rendered report. Open the PBIX in Power BI Desktop to inspect the actual visuals and interact with the slicers.
+> **Preview note:** The image above is a layout reconstruction based on the uploaded PBIX report metadata. The chart marks are illustrative placeholders, not exported Power BI values or a screenshot of the rendered report. The PBIX binary itself is not yet committed to this repository; add `customer_behavior_dashboard.pbix` to the repository root to make the interactive report available alongside this documentation.
 
 ---
 
